@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  js:
     name: Lint, typecheck, test, pack
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -58,7 +58,7 @@ jobs:
 
       - name: Deny-list scan
         run: |
-          DENY='\.map$|\.snap$|\.tgz$|\.iml$|\.DS_Store$|/xcuserdata/|/\.project$|/\.settings/|/\.idea/|/\.vscode/|/__tests__/|/__snapshots__/|/__fixtures__/|/__mocks__/|/test/|/androidTest/|\.test\.|\.spec\.|^\.github/|^\.circleci/|^\.npmrc$|^\.yarnrc$|^\.editorconfig$|^\.gitattributes$|^\.gitignore$|^\.eslintrc|^\.prettierrc|^tsconfig|^babel\.config|^jest\.config|^yarn\.lock$|^package-lock\.json$|/coverage/|/node_modules/'
+          DENY='\.map$|\.snap$|\.tgz$|\.iml$|\.DS_Store$|/xcuserdata/|/\.project$|/\.settings/|/\.idea/|/\.vscode/|/__tests__/|/__snapshots__/|/__fixtures__/|/__mocks__/|/test/|/androidTest/|/BundleLoaderTests/|\.test\.|\.spec\.|^\.github/|^\.circleci/|^\.npmrc$|^\.yarnrc$|^\.editorconfig$|^\.gitattributes$|^\.gitignore$|^\.eslintignore$|^\.eslintrc|^\.prettierrc|^tsconfig|^babel\.config|^jest\.config|^yarn\.lock$|^package-lock\.json$|/coverage/|/node_modules/|^android/gradlew|^android/gradle/'
           if grep -E "$DENY" _pack/files.txt; then
             echo "::error::Disallowed file pattern matched in npm tarball" >&2
             exit 1
@@ -73,3 +73,84 @@ jobs:
             exit 1
           fi
           echo "Allowlist exact-match: $(wc -l < .npm-tarball-allowlist) files"
+
+  android:
+    name: Android JVM unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.x
+          cache: yarn
+
+      - name: Setup Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          java-version: '11'
+          distribution: temurin
+
+      - name: Install (frozen lockfile, no scripts)
+        run: yarn install --frozen-lockfile --ignore-scripts
+
+      - name: Run gradle tests
+        working-directory: android
+        run: ./gradlew test --console=plain --no-daemon
+
+  ios:
+    name: iOS XCTest
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.x
+          cache: yarn
+
+      - name: Install (frozen lockfile, no scripts)
+        run: yarn install --frozen-lockfile --ignore-scripts
+
+      - name: Pick iOS Simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | jq -r '
+            .devices
+            | to_entries[]
+            | select(.key | contains("iOS"))
+            | .value[]
+            | select(.name | startswith("iPhone"))
+            | .udid' | head -1)
+          if [ -z "$UDID" ]; then
+            echo "::error::No iPhone simulator available" >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Picked iOS Simulator UDID: $UDID"
+
+      - name: Run XCTest
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project BundleLoader.xcodeproj \
+            -scheme BundleLoaderTests \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}"
