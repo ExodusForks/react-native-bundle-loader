@@ -116,4 +116,7 @@ def reactNativeArtifactVersion = rootProject.ext.has('reactNativeVersion') ? roo
 
 dependencies {
   api "com.facebook.react:react-native:${reactNativeArtifactVersion}"
+
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }

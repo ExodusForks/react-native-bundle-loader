@@ -27,7 +27,7 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   private static final String BUNDLE_FILENAME = "verified-bundle.jsbundle";
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 30_000;
-  private static final int MAX_BUNDLE_BYTES = 64 * 1024 * 1024;
+  static final long MAX_BUNDLE_BYTES = 64L * 1024L * 1024L;
 
   private static volatile boolean remoteLoaded = false;
 
@@ -43,7 +43,7 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
 
   @ReactMethod
   public void load(final String url) {
-    if (url == null || !url.startsWith("https://")) {
+    if (!isHttps(url)) {
       Log.e(TAG, "Bundle URL must use the https scheme");
       return;
     }
@@ -51,7 +51,17 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
       @Override
       public void run() {
         try {
-          File bundleFile = downloadToCache(url);
+          File targetFile = new File(
+              getReactApplicationContext().getCacheDir(),
+              BUNDLE_FILENAME
+          );
+          File bundleFile = downloadToCache(
+              url,
+              targetFile,
+              CONNECT_TIMEOUT_MS,
+              READ_TIMEOUT_MS,
+              MAX_BUNDLE_BYTES
+          );
           swapBundleLoaderAndReload(bundleFile);
         } catch (Exception e) {
           Log.e(TAG, "load(" + url + ") failed", e);
@@ -87,11 +97,35 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
     promise.resolve(remoteLoaded ? "REMOTE" : "LOCAL");
   }
 
-  private File downloadToCache(String urlString) throws IOException {
+  /**
+   * Returns true iff the URL is non-null and uses the https scheme.
+   * Extracted as a static helper so it can be unit-tested without the threading
+   * machinery in {@link #load(String)}.
+   */
+  static boolean isHttps(String url) {
+    return url != null && url.startsWith("https://");
+  }
+
+  /**
+   * Downloads {@code urlString} into {@code targetFile} using HttpURLConnection.
+   * Redirects are not followed and non-200 responses throw IOException with the
+   * status code in the message. The download is hard-capped at {@code maxBytes};
+   * once the cap is exceeded the read loop aborts with IOException.
+   * <p>
+   * Package-private and static so the JVM unit tests can drive it against a
+   * MockWebServer without spinning up a ReactApplicationContext.
+   */
+  static File downloadToCache(
+      String urlString,
+      File targetFile,
+      int connectTimeoutMs,
+      int readTimeoutMs,
+      long maxBytes
+  ) throws IOException {
     URL url = new URL(urlString);
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-    conn.setReadTimeout(READ_TIMEOUT_MS);
+    conn.setConnectTimeout(connectTimeoutMs);
+    conn.setReadTimeout(readTimeoutMs);
     // Disallow follow-redirects so an HTTPS URL cannot transparently downgrade to HTTP.
     conn.setInstanceFollowRedirects(false);
     try {
@@ -99,26 +133,22 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
       if (code != HttpURLConnection.HTTP_OK) {
         throw new IOException("Bundle fetch failed: HTTP " + code);
       }
-      File file = new File(
-          getReactApplicationContext().getCacheDir(),
-          BUNDLE_FILENAME
-      );
       long total = 0;
       try (InputStream in = conn.getInputStream();
-           FileOutputStream out = new FileOutputStream(file)) {
+           FileOutputStream out = new FileOutputStream(targetFile)) {
         byte[] buf = new byte[8192];
         int n;
         while ((n = in.read(buf)) != -1) {
           total += n;
-          if (total > MAX_BUNDLE_BYTES) {
+          if (total > maxBytes) {
             throw new IOException(
-                "Bundle exceeds " + MAX_BUNDLE_BYTES + " bytes"
+                "Bundle exceeds " + maxBytes + " bytes"
             );
           }
           out.write(buf, 0, n);
         }
       }
-      return file;
+      return targetFile;
     } finally {
       conn.disconnect();
     }
