@@ -10,19 +10,41 @@
   "files": [
     "src",
     "lib",
-    "android",
-    "ios",
+    "android/build.gradle",
+    "android/gradle.properties",
+    "android/src/main",
+    "ios/BundleLoader.h",
+    "ios/BundleLoader.m",
+    "ios/BundleLoader.xcodeproj/project.pbxproj",
     "react-native-bundle-loader.podspec",
-    "!lib/typescript/example",
+    "SECURITY.md",
+    "!**/*.map",
+    "!**/*.snap",
+    "!**/*.iml",
+    "!**/*.tgz",
+    "!**/*.test.*",
+    "!**/*.spec.*",
     "!**/__tests__",
+    "!**/__snapshots__",
     "!**/__fixtures__",
-    "!**/__mocks__"
+    "!**/__mocks__",
+    "!**/.DS_Store",
+    "!**/.gitkeep",
+    "!**/xcuserdata",
+    "!**/.project",
+    "!**/.settings",
+    "!**/.idea",
+    "!**/.vscode",
+    "!android/src/test",
+    "!android/src/androidTest"
   ],
   "scripts": {
     "test": "jest",
     "typescript": "tsc --noEmit",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
-    "prepare": "bob build"
+    "prepare": "bob build",
+    "verify-pack": "rm -rf _pack && mkdir _pack && yarn prepare && npm pack --pack-destination _pack && tar -tzf _pack/*.tgz | LC_ALL=C sort | sed 's|^package/||' | diff -u .npm-tarball-allowlist -",
+    "preflight": "yarn lint && yarn typescript && yarn test --ci --runInBand && yarn verify-pack"
   },
   "engines": {
     "node": ">=18.18"
@@ -33,7 +55,11 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "bundle",
+    "remote",
+    "ota",
+    "integrity"
   ],
   "repository": {
     "type": "git",
