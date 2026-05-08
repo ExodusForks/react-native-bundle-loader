@@ -1,6 +1,6 @@
 {
   "name": "@exodus/react-native-bundle-loader",
-  "version": "0.2.0-exodus.0",
+  "version": "0.2.0-exodus.1",
   "description": "Loads a remote React Native JS bundle.",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
