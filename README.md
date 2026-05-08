@@ -44,10 +44,10 @@ Behavior:
 - The URL must use the `https:` scheme.
 - The expected sha256 must be a 64-character hex string.
 - The bytes are fetched, hashed in JS using `@exodus/crypto/hash`, and compared to the expected hash with a constant-time comparison.
-- On match, the bytes are written to the iOS sandbox temp directory with `NSDataWritingFileProtectionComplete` and the bridge is reloaded from that local `file://` URL.
+- On match, the bytes are written to the platform's app-private cache (iOS: `NSTemporaryDirectory()` with `NSDataWritingFileProtectionComplete`; Android: `Context.getCacheDir()`) and the bridge is reloaded from the local file path.
 - On mismatch, an error is thrown and the bridge is left untouched.
 
-iOS only. On Android the call rejects with `E_NOT_SUPPORTED`.
+Works on iOS and Android. The hash check happens in JS before any native call, so the integrity contract is identical on both platforms.
 
 ### Unverified loading
 
@@ -75,19 +75,24 @@ Same idea as upstream: expose your local Metro packager via a tunnel (e.g. `ngro
 
 - `dev`: `true` or `false` matching how the binary was built
 - `excludeSource`: `true`
-- `platform`: `ios` (Android is not supported for actual bundle loading)
+- `platform`: `ios` or `android` matching the host
 
 Example: `https://example.ngrok.io/index.bundle?dev=false&platform=ios&excludeSource=true`
 
 ## Platform support
 
-| Capability                  | iOS   | Android                                    |
-| --------------------------- | ----- | ------------------------------------------ |
-| `load(url)`                 | ✅    | ⚠️ Sets Metro debug-server host only (dev) |
-| `loadVerified(url, sha256)` | ✅    | ❌ Rejects with `E_NOT_SUPPORTED`          |
-| `runningMode()`             | ✅    | ❌ Rejects with `E_NOT_SUPPORTED`          |
+| Capability                  | iOS | Android |
+| --------------------------- | --- | ------- |
+| `load(url)`                 | ✅  | ✅      |
+| `loadVerified(url, sha256)` | ✅  | ✅      |
+| `runningMode()`             | ✅  | ✅      |
 
-The Android `load(host)` calls into `DevInternalSettings`, which is an internal React Native API. It is intentionally **not** symmetric with iOS; do not rely on it for production loads. Track the open question in `SECURITY.md`.
+### How the in-process swap works
+
+- **iOS** writes the bundle to `NSTemporaryDirectory()` and sets the bridge's `bundleURL` via KVC (`[bridge setValue:url forKey:@"bundleURL"]`), then calls `[bridge reload]`.
+- **Android** writes the bundle to `Context.getCacheDir()`, builds a `JSBundleLoader.createFileLoader(path)`, swaps it into the private `mBundleLoader` field on `ReactInstanceManager` via reflection, and calls `recreateReactContextInBackground()`.
+
+Both mechanisms touch private/internal React Native surface and could break on a major RN upgrade. See `SECURITY.md`. The Android implementation requires the host app to implement `ReactApplication` (the standard React Native template does).
 
 ## Provenance
 

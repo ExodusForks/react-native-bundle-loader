@@ -5,7 +5,6 @@ import {
   Modal,
   NativeModules,
   NativeSyntheticEvent,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -60,11 +59,6 @@ export async function loadVerified(
   url: string,
   expectedSha256Hex: string
 ): Promise<void> {
-  if (Platform.OS !== 'ios') {
-    throw new Error(
-      `loadVerified is only supported on iOS (Platform.OS=${Platform.OS})`
-    );
-  }
   assertSafeUrl(url);
   if (
     typeof expectedSha256Hex !== 'string' ||

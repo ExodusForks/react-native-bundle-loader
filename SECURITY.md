@@ -33,11 +33,10 @@ This library exists to load and execute a remote JavaScript bundle inside the ho
 
 ## Accepted residual risks
 
-- **Android `load()` calls `DevInternalSettings`** (an internal React Native API) and only swaps the Metro debug-server host. It is *not* a real bundle loader and is documented as such in `README.md`. Do not rely on it.
-- **The bridge `bundleURL` setter is a KVC write** to a non-public RN property (`[bridge setValue:url forKey:@"bundleURL"]`). Behavior could change on an RN upgrade and silently no-op the loader.
-- **`@exodus/crypto/hash` runs in JS on the JS thread.** Bundles are typically a few MB; hashing time is acceptable. We deliberately keep hashing in JS so the threat-model contract — "Exodus crypto verifies, and the verified bytes are what we hand to native" — is auditable in TypeScript.
+- **The bridge `bundleURL` setter is a KVC write** on iOS (`[bridge setValue:url forKey:@"bundleURL"]`) to a non-public RN property. Behavior could change on an RN upgrade and silently no-op the loader.
+- **The Android bundle swap reflects on a private field.** `ReactInstanceManager.mBundleLoader` has no public setter, so we use `Field.setAccessible(true)` to install a fresh `JSBundleLoader.createFileLoader(...)` before calling `recreateReactContextInBackground()`. The field name has been stable across RN 0.62–0.74 but is not part of the public API; an RN upgrade could rename or remove it, in which case `loadVerified`/`load` will throw `NoSuchFieldException` rather than silently no-op.
+- **`@exodus/crypto/hash` runs in JS on the JS thread.** Bundles are typically a few MB; hashing time is acceptable. We deliberately keep hashing in JS so the threat-model contract — "Exodus crypto verifies, and the verified bytes are what we hand to native" — is auditable in TypeScript and identical on iOS and Android.
 - **`timingSafeEqual()` is currently inlined** as a small constant-time XOR loop. The threat model anticipates this moving to a future `@exodus/crypto` export. The inlined version is functionally equivalent and lives in `src/index.tsx`.
-- **Android implementation is contributed by an external author** (`milad.bagherii@digikala.com` from the `mldb` mirror, 2021). It has been minimally modified for compile-correctness and module name; we have not deeply audited the upstream RN `DevInternalSettings` invocation pattern. The Android path is documented as developer-mode only.
 
 ## Release process
 
