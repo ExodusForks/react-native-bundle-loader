@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-
-
+		24CE545938292C60A5CCE9C6 /* BundleLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = D86256900CD7CE9D4230C8F0 /* BundleLoader.m */; };
 		5E555C0D2413F4C50049A1A2 /* BundleLoader.mm in Sources */ = {isa = PBXBuildFile; fileRef = B3E7B5891CC2AC0600A0062D /* BundleLoader.mm */; };
+		92B2598D965DC32AAF3C04DC /* RCTShim.m in Sources */ = {isa = PBXBuildFile; fileRef = 57BC896F9AB3CF10CC9A982D /* RCTShim.m */; };
+		B69ED17115D9C485D9548941 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8D436DEAC2A4CBEA60395C01 /* Foundation.framework */; };
+		E40411861DEA09400E90C294 /* BundleLoaderTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 652EEA1023B3EC9464EE6AB7 /* BundleLoaderTests.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -26,14 +28,25 @@
 
 /* Begin PBXFileReference section */
 		134814201AA4EA6300B7C361 /* libBundleLoader.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libBundleLoader.a; sourceTree = BUILT_PRODUCTS_DIR; };
-
-
+		41DDBD47E9DE312B7A311653 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		57BC896F9AB3CF10CC9A982D /* RCTShim.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = RCTShim.m; sourceTree = "<group>"; };
+		652EEA1023B3EC9464EE6AB7 /* BundleLoaderTests.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = BundleLoaderTests.m; sourceTree = "<group>"; };
+		8D436DEAC2A4CBEA60395C01 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		A2704714B0CBE9056A0C7575 /* BundleLoaderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BundleLoaderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3E7B5881CC2AC0600A0062D /* BundleLoader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BundleLoader.h; sourceTree = "<group>"; };
 		B3E7B5891CC2AC0600A0062D /* BundleLoader.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = BundleLoader.mm; sourceTree = "<group>"; };
-
+		D86256900CD7CE9D4230C8F0 /* BundleLoader.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BundleLoader.m; path = ../BundleLoader.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4B47E8930D88164ED0964EE4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B69ED17115D9C485D9548941 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		58B511D81A9E6C8500147676 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -44,6 +57,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0ED20A3ECAA42A9D0C0DF4B7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				84C5FDD66827346FEB6301E0 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		134814211AA4EA7D00B7C361 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -55,13 +76,33 @@
 		58B511D21A9E6C8500147676 = {
 			isa = PBXGroup;
 			children = (
-
-
 				B3E7B5881CC2AC0600A0062D /* BundleLoader.h */,
 				B3E7B5891CC2AC0600A0062D /* BundleLoader.mm */,
-
 				134814211AA4EA7D00B7C361 /* Products */,
+				8561C764A29C0D1EEB7A96AF /* BundleLoaderTests */,
+				A2704714B0CBE9056A0C7575 /* BundleLoaderTests.xctest */,
+				0ED20A3ECAA42A9D0C0DF4B7 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		84C5FDD66827346FEB6301E0 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				8D436DEAC2A4CBEA60395C01 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		8561C764A29C0D1EEB7A96AF /* BundleLoaderTests */ = {
+			isa = PBXGroup;
+			children = (
+				D86256900CD7CE9D4230C8F0 /* BundleLoader.m */,
+				652EEA1023B3EC9464EE6AB7 /* BundleLoaderTests.m */,
+				57BC896F9AB3CF10CC9A982D /* RCTShim.m */,
+				41DDBD47E9DE312B7A311653 /* Info.plist */,
+			);
+			name = BundleLoaderTests;
+			path = BundleLoaderTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -83,6 +124,24 @@
 			productName = RCTDataManager;
 			productReference = 134814201AA4EA6300B7C361 /* libBundleLoader.a */;
 			productType = "com.apple.product-type.library.static";
+		};
+		907A5308750D4F32A1FEED66 /* BundleLoaderTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1BFF3F804D83A453070B922 /* Build configuration list for PBXNativeTarget "BundleLoaderTests" */;
+			buildPhases = (
+				A1532518EC7CA226B14679F7 /* Generate React header shim */,
+				B462B17BA89D4AE0FF1ECED6 /* Sources */,
+				4B47E8930D88164ED0964EE4 /* Frameworks */,
+				0E0C7AEDC338098073E25692 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BundleLoaderTests;
+			productName = BundleLoaderTests;
+			productReference = A2704714B0CBE9056A0C7575 /* BundleLoaderTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -112,19 +171,58 @@
 			projectRoot = "";
 			targets = (
 				58B511DA1A9E6C8500147676 /* BundleLoader */,
+				907A5308750D4F32A1FEED66 /* BundleLoaderTests */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0E0C7AEDC338098073E25692 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A1532518EC7CA226B14679F7 /* Generate React header shim */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate React header shim";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\nset -euo pipefail\nRN_HEADERS_ROOT=\"${SRCROOT}/../node_modules/react-native/React\"\nOUT=\"${DERIVED_FILE_DIR}/RNHeaders/React\"\nmkdir -p \"$OUT\"\nif [ ! -d \"$RN_HEADERS_ROOT\" ]; then\n  echo \"error: react-native headers not found at $RN_HEADERS_ROOT\" >&2\n  exit 1\nfi\n# Flatten every .h under React/{Base,Modules,...} into the shim dir as symlinks.\nfind \"$RN_HEADERS_ROOT\" -type f -name '*.h' | while read -r f; do\n  name=$(basename \"$f\")\n  # Only link the first occurrence we encounter -- duplicates would error otherwise.\n  if [ ! -e \"$OUT/$name\" ]; then\n    ln -sf \"$f\" \"$OUT/$name\"\n  fi\ndone\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		58B511D71A9E6C8500147676 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-
-
 				5E555C0D2413F4C50049A1A2 /* BundleLoader.mm in Sources */,
-
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B462B17BA89D4AE0FF1ECED6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24CE545938292C60A5CCE9C6 /* BundleLoader.m in Sources */,
+				E40411861DEA09400E90C294 /* BundleLoaderTests.m in Sources */,
+				92B2598D965DC32AAF3C04DC /* RCTShim.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -237,7 +335,6 @@
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = BundleLoader;
 				SKIP_INSTALL = YES;
-
 			};
 			name = Debug;
 		};
@@ -254,7 +351,63 @@
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = BundleLoader;
 				SKIP_INSTALL = YES;
-
+			};
+			name = Release;
+		};
+		6B16E681D8B4E49389D63BCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					"$(DERIVED_FILE_DIR)/RNHeaders",
+				);
+				INFOPLIST_FILE = BundleLoaderTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.exodus.react-native-bundle-loader.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				USE_HEADERMAP = YES;
+			};
+			name = Debug;
+		};
+		DEB50DA86E5EBCD7FE39B7FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				GCC_WARN_INHIBIT_ALL_WARNINGS = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					"$(DERIVED_FILE_DIR)/RNHeaders",
+				);
+				INFOPLIST_FILE = BundleLoaderTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.exodus.react-native-bundle-loader.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				USE_HEADERMAP = YES;
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -275,6 +428,15 @@
 			buildConfigurations = (
 				58B511F01A9E6C8500147676 /* Debug */,
 				58B511F11A9E6C8500147676 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F1BFF3F804D83A453070B922 /* Build configuration list for PBXNativeTarget "BundleLoaderTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DEB50DA86E5EBCD7FE39B7FF /* Release */,
+				6B16E681D8B4E49389D63BCC /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

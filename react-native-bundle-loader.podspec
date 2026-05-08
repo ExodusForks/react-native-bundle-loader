@@ -14,6 +14,11 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/ExodusForks/react-native-bundle-loader.git", :tag => "v#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm}"
+  # Exclude unit-test sources so consumers don't get test code in their app.
+  # Note: npm consumers never see these files (the package.json `files`
+  # allowlist excludes `ios/BundleLoaderTests/`); this guard is for
+  # CocoaPods consumers that fetch from git.
+  s.exclude_files = "ios/BundleLoaderTests/**/*"
 
   s.dependency "React-Core"
 end
