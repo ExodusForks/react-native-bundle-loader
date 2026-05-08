@@ -1,7 +1,7 @@
 {
-  "name": "react-native-bundle-loader",
+  "name": "@exodus/react-native-bundle-loader",
   "version": "0.2.0",
-  "description": "Allows to load remote bundle via http URL.",
+  "description": "Loads a remote React Native JS bundle.",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
   "types": "lib/typescript/src/index.d.ts",
@@ -34,13 +34,19 @@
     "ios",
     "android"
   ],
-  "repository": "https://github.com/jusbrasil/react-native-bundle-loader",
-  "author": "Jusbrasil <dev@jusbrasil.com.br> (https://github.com/jusbrasil/)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ExodusForks/react-native-bundle-loader.git"
+  },
+  "author": "Exodus Movement, Inc. <hello@exodus.com>",
+  "contributors": [
+    "Jusbrasil <dev@jusbrasil.com.br> (original author)"
+  ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jusbrasil/react-native-bundle-loader/issues"
+    "url": "https://github.com/ExodusForks/react-native-bundle-loader/issues"
   },
-  "homepage": "https://github.com/jusbrasil/react-native-bundle-loader#readme",
+  "homepage": "https://github.com/ExodusForks/react-native-bundle-loader#readme",
   "devDependencies": {
     "@commitlint/config-conventional": "^8.3.4",
     "@react-native-community/bob": "^0.16.2",

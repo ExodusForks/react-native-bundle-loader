@@ -1,56 +1,40 @@
-# react-native-bundle-loader
+# @exodus/react-native-bundle-loader
 
-Allows to load remote bundle via URL.
-Useful for testing a [Metro](https://github.com/facebook/metro) bundler running remotely.
+Loads a remote React Native JS bundle and reloads the bridge.
+
+> Exodus fork of [`react-native-bundle-loader`](https://www.npmjs.com/package/react-native-bundle-loader)
+> (originally by Jusbrasil; upstream GitHub repo deleted; full provenance below).
 
 ## Installation
 
 ```sh
-yarn add react-native-bundle-loader
+yarn add @exodus/react-native-bundle-loader
+cd ios && pod install
 ```
 
 ## Usage
 
-```js
-import BundleLoader, { BundlePrompt } from 'react-native-bundle-loader';
+```ts
+import BundleLoader, { BundlePrompt } from '@exodus/react-native-bundle-loader';
 
-// ...
-
-// You can use the component to provide the remote URL:
-function SomeScreen() {
-  return <BundlePrompt />;
-}
-
-// Or call the `load` method explictly in your own prompt:
-BundleLoader.load('https://some-remote-url/bundle.js');
+BundleLoader.load('https://bundles.example.com/main.jsbundle');
 ```
 
-## Accessing a running react-native packager
+Or use the developer-facing prompt component:
 
-With `react-native-bundle-loader` you can also allow remote bundle accessing of a metro server running on a developer's machine.
-Note: the app binary running on cellphone already has the react-native-bundle-loader lib installed and configured properly.
+```tsx
+import { BundlePrompt } from '@exodus/react-native-bundle-loader';
 
+<BundlePrompt />;
+```
 
-### Exposing the metro server
+## Threat model
 
-1. Ensure that a metro server is running on the developer machine (`yarn start`);
-2. Expose the running metro server to the world. You can use any tool for generating a secure tunnel from a public endpoint to the locally running metro server like [ngrok](https://ngrok.com/):  `ngrok http 8081`
-3. With `BundlePrompt` (or via `BundleLoader.load()`) pass the URL of the exposed metro server. Provide the params to the metro server:
-  - `dev`: based on the mode the binary was built `true` for development or `false` for release
-  - `excludeSource`: `true`
-  - `platform`: `ios` or `android` (currently only iOS is supported).
+Loading a remote JS bundle is, by construction, remote code execution inside the host app. **This library is intended for internal/development builds only — do not ship it in store builds without an out-of-band, statically-stripped feature flag.**
 
-Example URL: `https://example.ngrok.io/index.bundle?dev=false&platform=ios&excludeSource=true`
+## Provenance
 
-Every accessing to the metro server will return the updated version of the code :slightly_smiling_face:
-
-## :warning: Disclaimer
-
-Be careful about publishing binary versions with `react-native-bundle-loader` supporting in the stores. A malicious code could be injected to your app and affect the users. We **strictly** recommend to distribute versions with custom bundle supporting enabled only internally.
-
-## Contributing
-
-See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
+This is a fork of `react-native-bundle-loader@0.1.0` originally published by Jusbrasil (2020-10-21, npm publisher `helielson`, commit `ec3d4520`). The upstream GitHub repo at `github.com/jusbrasil/react-native-bundle-loader` was subsequently deleted. The complete original git history is preserved through the v0.1.0 release commit; the Android implementation was contributed by `milad.bagherii@digikala.com` in the `mldb/react-native-bundle-loader` mirror in 2021.
 
 ## License
 
