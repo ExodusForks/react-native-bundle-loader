@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, typecheck, test, pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.x
+          cache: yarn
+
+      - name: Install (frozen lockfile, no scripts)
+        run: yarn install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Typecheck
+        run: yarn typescript
+
+      - name: Test
+        run: yarn test --ci --runInBand
+
+      - name: Build (bob)
+        run: yarn prepare
+
+      - name: Pack tarball
+        run: |
+          mkdir -p _pack
+          npm pack --pack-destination _pack
+          tar -tzf _pack/*.tgz | LC_ALL=C sort | sed 's|^package/||' > _pack/files.txt
+          echo "::group::Tarball contents"
+          cat _pack/files.txt
+          echo "::endgroup::"
+
+      - name: Deny-list scan
+        run: |
+          DENY='\.map$|\.snap$|\.tgz$|\.iml$|\.DS_Store$|/xcuserdata/|/\.project$|/\.settings/|/\.idea/|/\.vscode/|/__tests__/|/__snapshots__/|/__fixtures__/|/__mocks__/|/test/|/androidTest/|\.test\.|\.spec\.|^\.github/|^\.circleci/|^\.npmrc$|^\.yarnrc$|^\.editorconfig$|^\.gitattributes$|^\.gitignore$|^\.eslintrc|^\.prettierrc|^tsconfig|^babel\.config|^jest\.config|^yarn\.lock$|^package-lock\.json$|/coverage/|/node_modules/'
+          if grep -E "$DENY" _pack/files.txt; then
+            echo "::error::Disallowed file pattern matched in npm tarball" >&2
+            exit 1
+          fi
+          echo "Deny-list scan: clean"
+
+      - name: Allowlist exact-match check
+        run: |
+          if ! diff -u .npm-tarball-allowlist _pack/files.txt; then
+            echo "::error::Tarball file list does not match .npm-tarball-allowlist" >&2
+            echo "If the change is intentional, update .npm-tarball-allowlist to match." >&2
+            exit 1
+          fi
+          echo "Allowlist exact-match: $(wc -l < .npm-tarball-allowlist) files"
