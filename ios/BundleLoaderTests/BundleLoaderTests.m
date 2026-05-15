@@ -6,9 +6,10 @@
 @interface BundleLoader (Testing)
 - (void)setBundleURLAndReload:(NSURL *)url;
 - (void)load:(NSURL *)url;
-- (void)loadFromBase64:(NSString *)base64
-              resolver:(void (^)(id))resolve
-              rejecter:(void (^)(NSString *, NSString *, NSError *))reject;
+- (void)loadVerifiedFromUrl:(NSString *)urlString
+             expectedSha256:(NSString *)expectedHex
+                   resolver:(void (^)(id))resolve
+                   rejecter:(void (^)(NSString *, NSString *, NSError *))reject;
 @end
 
 #pragma mark - Mock bridge
@@ -82,7 +83,7 @@
 
 - (void)tearDown
 {
-  // Best-effort cleanup of the file we may have written in test #1.
+  // Best-effort cleanup of the bundle file any test may have written to disk.
   NSString *path = [NSTemporaryDirectory()
       stringByAppendingPathComponent:@"verified-bundle.jsbundle"];
   [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
@@ -104,90 +105,7 @@
   }
 }
 
-#pragma mark - Test 1: loadFromBase64 happy path
-
-- (void)testLoadFromBase64HappyPath
-{
-  NSString *plaintext = @"hello world";
-  NSData *expected = [plaintext dataUsingEncoding:NSUTF8StringEncoding];
-  NSString *base64 = [expected base64EncodedStringWithOptions:0];
-
-  XCTestExpectation *resolved = [self expectationWithDescription:@"resolver fires"];
-
-  __block id resolveValue = (id)@"<<unset>>";
-  __block BOOL rejected = NO;
-
-  [self.loader loadFromBase64:base64
-                     resolver:^(id result) {
-                       resolveValue = result;
-                       [resolved fulfill];
-                     }
-                     rejecter:^(NSString *code, NSString *message, NSError *err) {
-                       rejected = YES;
-                       [resolved fulfill];
-                     }];
-
-  [self waitForExpectations:@[resolved] timeout:5.0];
-
-  XCTAssertFalse(rejected, @"resolver should have fired, not the rejecter");
-  XCTAssertTrue(resolveValue == nil || [resolveValue isKindOfClass:[NSNull class]],
-                @"resolver should be called with nil");
-
-  NSString *path = [NSTemporaryDirectory()
-      stringByAppendingPathComponent:@"verified-bundle.jsbundle"];
-  XCTAssertTrue([[NSFileManager defaultManager] fileExistsAtPath:path],
-                @"bundle file should exist on disk");
-
-  NSData *actual = [NSData dataWithContentsOfFile:path];
-  XCTAssertEqualObjects(actual, expected, @"file bytes should round-trip exactly");
-
-  NSError *attrErr = nil;
-  NSDictionary *attrs = [[NSFileManager defaultManager]
-      attributesOfItemAtPath:path
-                       error:&attrErr];
-  XCTAssertNil(attrErr);
-
-  // Data Protection is only enforced on real iOS devices; the iOS Simulator
-  // silently ignores `NSDataWritingFileProtectionComplete` and reports nil
-  // for `NSFileProtectionKey`. Accept either: nil (simulator) or
-  // `NSFileProtectionComplete` (device).
-  id protection = attrs[NSFileProtectionKey];
-#if TARGET_OS_SIMULATOR
-  XCTAssertTrue(protection == nil
-                    || [protection isEqualToString:NSFileProtectionComplete],
-                @"on simulator, NSFileProtectionKey is typically nil; saw: %@",
-                protection);
-#else
-  XCTAssertEqualObjects(protection, NSFileProtectionComplete,
-                        @"file should be written with NSFileProtectionComplete");
-#endif
-}
-
-#pragma mark - Test 2: loadFromBase64 invalid input
-
-- (void)testLoadFromBase64InvalidInput
-{
-  XCTestExpectation *rejected = [self expectationWithDescription:@"rejecter fires"];
-  __block NSString *seenCode = nil;
-  __block BOOL resolved = NO;
-
-  [self.loader loadFromBase64:@"!!!not-base64!!!"
-                     resolver:^(id result) {
-                       resolved = YES;
-                       [rejected fulfill];
-                     }
-                     rejecter:^(NSString *code, NSString *message, NSError *err) {
-                       seenCode = code;
-                       [rejected fulfill];
-                     }];
-
-  [self waitForExpectations:@[rejected] timeout:5.0];
-
-  XCTAssertFalse(resolved, @"resolver should not fire for invalid base64");
-  XCTAssertEqualObjects(seenCode, @"E_INVALID_BASE64");
-}
-
-#pragma mark - Test 3: load: rejects non-https
+#pragma mark - Test 1: load rejects non-https
 
 - (void)testLoadRejectsNonHttps
 {
@@ -201,7 +119,7 @@
                  @"non-https URL must not trigger reload");
 }
 
-#pragma mark - Test 4: load: accepts https
+#pragma mark - Test 2: load accepts https
 
 - (void)testLoadAcceptsHttps
 {
@@ -217,7 +135,7 @@
                  @"exactly one reload expected for https URL");
 }
 
-#pragma mark - Test 5: setBundleURLAndReload: directly
+#pragma mark - Test 3: setBundleURLAndReload order
 
 - (void)testSetBundleURLAndReloadOrder
 {
@@ -236,6 +154,72 @@
 
   XCTAssertEqual(self.mockBridge.kvcSets.count, 1u);
   XCTAssertEqual(self.mockBridge.reloads.count, 1u);
+}
+
+#pragma mark - Test 4: loadVerifiedFromUrl rejects non-https
+
+- (void)testLoadVerifiedFromUrlRejectsNonHttps
+{
+  XCTestExpectation *exp = [self expectationWithDescription:@"rejecter fires for non-https URL"];
+  __block NSString *seenCode = nil;
+  __block BOOL resolved = NO;
+
+  NSString *validHex = [@"" stringByPaddingToLength:64 withString:@"a" startingAtIndex:0];
+  [self.loader loadVerifiedFromUrl:@"http://example.com/bundle.js"
+                    expectedSha256:validHex
+                          resolver:^(id r) { resolved = YES; [exp fulfill]; }
+                          rejecter:^(NSString *code, NSString *msg, NSError *err) {
+    seenCode = code;
+    [exp fulfill];
+  }];
+
+  [self waitForExpectations:@[exp] timeout:2.0];
+  XCTAssertFalse(resolved, @"resolver must not fire");
+  XCTAssertEqualObjects(seenCode, @"E_INVALID_URL");
+}
+
+#pragma mark - Test 5: loadVerifiedFromUrl rejects wrong-length hex
+
+- (void)testLoadVerifiedFromUrlRejectsWrongLengthHex
+{
+  XCTestExpectation *exp = [self expectationWithDescription:@"rejecter fires for short hex"];
+  __block NSString *seenCode = nil;
+  __block BOOL resolved = NO;
+
+  [self.loader loadVerifiedFromUrl:@"https://example.com/bundle.js"
+                    expectedSha256:@"abc"
+                          resolver:^(id r) { resolved = YES; [exp fulfill]; }
+                          rejecter:^(NSString *code, NSString *msg, NSError *err) {
+    seenCode = code;
+    [exp fulfill];
+  }];
+
+  [self waitForExpectations:@[exp] timeout:2.0];
+  XCTAssertFalse(resolved, @"resolver must not fire");
+  XCTAssertEqualObjects(seenCode, @"E_INVALID_HASH");
+}
+
+#pragma mark - Test 6: loadVerifiedFromUrl rejects invalid hex chars
+
+- (void)testLoadVerifiedFromUrlRejectsInvalidHexChars
+{
+  XCTestExpectation *exp = [self expectationWithDescription:@"rejecter fires for invalid hex chars"];
+  __block NSString *seenCode = nil;
+  __block BOOL resolved = NO;
+
+  // 'g' is not a valid hex character; 64 of them pass the length check but fail strtoul.
+  NSString *badHex = [@"" stringByPaddingToLength:64 withString:@"g" startingAtIndex:0];
+  [self.loader loadVerifiedFromUrl:@"https://example.com/bundle.js"
+                    expectedSha256:badHex
+                          resolver:^(id r) { resolved = YES; [exp fulfill]; }
+                          rejecter:^(NSString *code, NSString *msg, NSError *err) {
+    seenCode = code;
+    [exp fulfill];
+  }];
+
+  [self waitForExpectations:@[exp] timeout:2.0];
+  XCTAssertFalse(resolved, @"resolver must not fire");
+  XCTAssertEqualObjects(seenCode, @"E_INVALID_HASH");
 }
 
 @end

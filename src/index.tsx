@@ -12,15 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { hash } from '@exodus/crypto/hash';
-import { fromHex } from '@exodus/bytes/hex.js';
-import { toBase64 } from '@exodus/bytes/base64.js';
 
 export type RunningMode = 'LOCAL' | 'REMOTE';
 
 type NativeBundleLoader = {
   load(url: string): void;
-  loadFromBase64?(base64: string): Promise<void>;
+  loadVerifiedFromUrl?(url: string, sha256: string): Promise<void>;
   runningMode(): Promise<RunningMode>;
 };
 
@@ -46,15 +43,6 @@ function assertSafeUrl(url: string): void {
   }
 }
 
-function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  /* eslint-disable no-bitwise */
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-  /* eslint-enable no-bitwise */
-  return diff === 0;
-}
-
 export async function loadVerified(
   url: string,
   expectedSha256Hex: string
@@ -66,27 +54,16 @@ export async function loadVerified(
   ) {
     throw new Error('Expected sha256 must be a 64-character hex string');
   }
-  const expected = fromHex(expectedSha256Hex);
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Bundle fetch failed: HTTP ${response.status}`);
-  }
-  const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  const actual = await hash('sha256', bytes, 'uint8');
-
-  if (!timingSafeEqualBytes(actual, expected)) {
-    throw new Error('Bundle hash mismatch — refusing to load');
-  }
 
   const native = getNative();
-  if (typeof native.loadFromBase64 !== 'function') {
+
+  if (typeof native.loadVerifiedFromUrl !== 'function') {
     throw new Error(
-      'Native loadFromBase64 not available. Rebuild the host app after upgrading.'
+      'loadVerifiedFromUrl is not available on this platform. Rebuild the host app with the latest native module.'
     );
   }
-  await native.loadFromBase64(toBase64(bytes));
+
+  await native.loadVerifiedFromUrl(url, expectedSha256Hex);
 }
 
 function loadUnverified(url: string): void {

@@ -40,11 +40,13 @@
   ],
   "scripts": {
     "test": "jest",
+    "test:android": "cd android && ./gradlew test",
+    "test:ios": "xcodebuild test -project ios/BundleLoader.xcodeproj -scheme BundleLoaderTests -destination 'platform=iOS Simulator,OS=18.4,name=iPhone 16' CODE_SIGNING_ALLOWED=NO -quiet",
     "typescript": "tsc --noEmit",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "prepare": "bob build",
     "verify-pack": "rm -rf _pack && mkdir _pack && yarn prepare && npm pack --pack-destination _pack && tar -tzf _pack/*.tgz | LC_ALL=C sort | sed 's|^package/||' | diff -u .npm-tarball-allowlist -",
-    "preflight": "yarn lint && yarn typescript && yarn test --ci --runInBand && yarn verify-pack"
+    "preflight": "yarn lint && yarn typescript && yarn test --ci --runInBand && yarn test:android && yarn test:ios && yarn verify-pack"
   },
   "engines": {
     "node": ">=18.18"
@@ -74,10 +76,7 @@
     "url": "https://github.com/ExodusForks/react-native-bundle-loader/issues"
   },
   "homepage": "https://github.com/ExodusForks/react-native-bundle-loader#readme",
-  "dependencies": {
-    "@exodus/bytes": "1.15.0",
-    "@exodus/crypto": "1.0.0-rc.34"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@react-native-community/bob": "0.16.2",
     "@react-native-community/eslint-config": "2.0.0",
