@@ -15,9 +15,9 @@ This library exists to load and execute a remote JavaScript bundle inside the ho
 
 | Surface                                     | Upstream `0.1.0`                                        | This fork                                                                                                                          |
 | ------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Bundle integrity                            | None — bridge fetches whatever the URL serves           | `loadVerified(url, sha256)` fetches bytes in JS, hashes with `@exodus/crypto`, compares constant-time, only then reloads from disk |
+| Bundle integrity                            | None — bridge fetches whatever the URL serves           | `loadVerified(url, sha256)` downloads bytes natively (iOS: `NSURLSession`, Android: `HttpURLConnection`), hashes with platform crypto (iOS: `CommonCrypto CC_SHA256`, Android: `MessageDigest SHA-256`), compares in constant-time, writes to app-private storage, and reloads the bridge from the local file — closing the TOCTOU window between fetch and load |
 | `BundlePrompt` default URL                  | Hardcoded `cdn.jsdelivr.net/gh/jusbrasil/...` (deleted) | Empty — operator must type a URL                                                                                                   |
-| Scheme enforcement                          | None — accepts `http://`, `file://`, etc.               | `https://` required at the JS boundary; native iOS `load:` re-checks                                                               |
+| Scheme enforcement                          | None — accepts `http://`, `file://`, etc.               | `https://` required at the JS boundary; both native `load` implementations re-check before touching the network                     |
 | Verified bundle on-disk protection (iOS)    | n/a                                                     | Written with `NSDataWritingFileProtectionComplete`                                                                                 |
 | Lockfile                                    | Not shipped                                             | `yarn.lock` committed; `.yarnrc` enforces `--frozen-lockfile`                                                                      |
 | Dependency version pinning                  | Carets (`^`)                                            | All direct deps pinned to exact versions; `.npmrc` `save-exact=true`                                                               |
@@ -35,15 +35,15 @@ This library exists to load and execute a remote JavaScript bundle inside the ho
 
 - **The bridge `bundleURL` setter is a KVC write** on iOS (`[bridge setValue:url forKey:@"bundleURL"]`) to a non-public RN property. Behavior could change on an RN upgrade and silently no-op the loader.
 - **The Android bundle swap reflects on a private field.** `ReactInstanceManager.mBundleLoader` has no public setter, so we use `Field.setAccessible(true)` to install a fresh `JSBundleLoader.createFileLoader(...)` before calling `recreateReactContextInBackground()`. The field name has been stable across RN 0.62–0.74 but is not part of the public API; an RN upgrade could rename or remove it, in which case `loadVerified`/`load` will throw `NoSuchFieldException` rather than silently no-op.
-- **`@exodus/crypto/hash` runs in JS on the JS thread.** Bundles are typically a few MB; hashing time is acceptable. We deliberately keep hashing in JS so the threat-model contract — "Exodus crypto verifies, and the verified bytes are what we hand to native" — is auditable in TypeScript and identical on iOS and Android.
-- **`timingSafeEqual()` is currently inlined** as a small constant-time XOR loop. The threat model anticipates this moving to a future `@exodus/crypto` export. The inlined version is functionally equivalent and lives in `src/index.tsx`.
+- **Hash verification runs in native code, not JS.** `loadVerifiedFromUrl` uses `CommonCrypto CC_SHA256` (iOS) and `MessageDigest SHA-256` (Android) with a constant-time XOR comparison loop in native code. This avoids a Hermes `RangeError: Maximum regex stack depth reached` that the previous JS-side `response.arrayBuffer()` path hit on bundles ≥ ~70 MB. The trade-off is that the integrity contract is no longer auditable as TypeScript.
+- **`timingSafeEqual` is an inlined XOR loop in native code.** Both `ios/BundleLoader.m` and `android/src/main/java/com/reactnativebundleloader/BundleLoaderModule.java` XOR all byte pairs into an accumulator and reject the bundle if the accumulator is non-zero.
 
 ## Release process
 
 This package has no CI/CD. Maintainers cut releases manually from a developer machine:
 
 ```sh
-yarn preflight   # lint + typecheck + test + verify-pack
+yarn preflight   # lint + typecheck + JS tests + Android JVM tests + iOS XCTests + verify-pack
 npm publish --access public
 ```
 
