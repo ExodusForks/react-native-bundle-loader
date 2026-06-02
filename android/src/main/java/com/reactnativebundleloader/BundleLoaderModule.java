@@ -7,6 +7,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.facebook.react.ReactApplication;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -24,12 +25,13 @@ import java.security.NoSuchAlgorithmException;
 public class BundleLoaderModule extends ReactContextBaseJavaModule {
 
   private static final String TAG = "BundleLoader";
-  // These values are referenced by string literals in the host app's MainApplication.
-  // Do not rename without updating the host app integration accordingly.
+  // Host app references these as string literals (library is debugImplementation only).
   static final String BUNDLE_FILENAME = "verified-bundle.jsbundle";
   static final String PREFS_NAME = "BundleLoader";
   static final String PREFS_PENDING_KEY = "pending_remote_bundle";
   static final String PREFS_ACTIVE_KEY = "active_remote_bundle";
+  // Metro/APK source URL captured at load time for correct asset resolution after restart.
+  static final String PREFS_METRO_SOURCE_URL_KEY = "metro_source_url";
 
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 30_000;
@@ -128,21 +130,35 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   }
 
   private void setPendingFlag() {
-    // commit() not apply() — apply() is async and the write may not reach disk
-    // before killProcess() terminates the process.
-    getReactApplicationContext()
+    SharedPreferences.Editor editor = getReactApplicationContext()
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
-        .putBoolean(PREFS_PENDING_KEY, true)
-        .commit();
+        .putBoolean(PREFS_PENDING_KEY, true);
+
+    // Store scriptURL for asset resolution after restart: Metro URL if available,
+    // asset:/// otherwise (genesis/release — assets served from APK).
+    String sourceUrl = getMetroSourceUrl();
+    editor.putString(PREFS_METRO_SOURCE_URL_KEY,
+        sourceUrl != null ? sourceUrl : "asset:///index.android.bundle");
+
+    // commit() not apply() — write must reach disk before killProcess().
+    editor.commit();
   }
 
-  /**
-   * Restarts the app process. On next launch, MainApplication reads the pending
-   * flag from SharedPreferences and loads the cached bundle instead of Metro.
-   * A process restart avoids running both the old and new Hermes runtimes
-   * simultaneously, which would exceed the device heap limit.
-   */
+  private String getMetroSourceUrl() {
+    try {
+      ReactApplication app = (ReactApplication) getReactApplicationContext().getApplicationContext();
+      String url = app.getReactNativeHost()
+          .getReactInstanceManager()
+          .getDevSupportManager()
+          .getSourceUrl();
+      return (url != null && !url.isEmpty()) ? url : null;
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  /** Kills and relaunches the process. Avoids running two Hermes runtimes simultaneously. */
   private void restartApp() {
     Context context = getReactApplicationContext();
     Intent intent = context.getPackageManager()
@@ -154,20 +170,12 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
     android.os.Process.killProcess(android.os.Process.myPid());
   }
 
-  /**
-   * Returns true iff the URL is non-null and uses the https scheme.
-   * Extracted as a static helper so it can be unit-tested without the threading
-   * machinery in {@link #load(String)}.
-   */
+  /** Package-private for testing. */
   static boolean isHttps(String url) {
     return url != null && url.startsWith("https://");
   }
 
-  /**
-   * Parses a 64-character lowercase hex string into a 32-byte SHA-256 digest.
-   * Throws {@link IllegalArgumentException} on invalid input so callers can
-   * reject the promise before touching the network.
-   */
+  /** Parses a 64-char hex string into a 32-byte digest. Package-private for testing. */
   static byte[] parseHexSha256(String hex) {
     if (hex == null || hex.length() != 64) {
       throw new IllegalArgumentException("Expected SHA-256 must be a 64-character hex string");
@@ -184,11 +192,7 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
     return out;
   }
 
-  /**
-   * Constant-time byte array comparison: XORs all pairs into an accumulator
-   * and returns true iff the accumulator is zero. Both arrays must be the
-   * same length; returns false immediately if they differ.
-   */
+  /** Constant-time equality check to prevent timing attacks. Package-private for testing. */
   static boolean timingSafeEquals(byte[] a, byte[] b) {
     if (a.length != b.length) return false;
     int diff = 0;
@@ -199,14 +203,8 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Downloads {@code urlString} into {@code targetFile}, computing SHA-256 of
-   * the body in the same streaming pass. Returns the 32-byte digest.
-   * <p>
-   * Mirrors the security properties of {@link #downloadToCache}: redirects are
-   * disabled, non-200 responses throw, and the body is capped at {@code maxBytes}.
-   * <p>
-   * Package-private and static so the JVM unit tests can drive it against a
-   * MockWebServer without spinning up a ReactApplicationContext.
+   * Downloads into {@code targetFile} and returns its SHA-256 digest.
+   * No redirects; non-200 throws; body capped at {@code maxBytes}. Package-private for testing.
    */
   static byte[] downloadAndHashToCache(
       String urlString,
@@ -253,13 +251,8 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   }
 
   /**
-   * Downloads {@code urlString} into {@code targetFile} using HttpURLConnection.
-   * Redirects are not followed and non-200 responses throw IOException with the
-   * status code in the message. The download is hard-capped at {@code maxBytes};
-   * once the cap is exceeded the read loop aborts with IOException.
-   * <p>
-   * Package-private and static so the JVM unit tests can drive it against a
-   * MockWebServer without spinning up a ReactApplicationContext.
+   * Downloads into {@code targetFile}. No redirects; non-200 throws; body capped at
+   * {@code maxBytes}. Package-private for testing.
    */
   static File downloadToCache(
       String urlString,

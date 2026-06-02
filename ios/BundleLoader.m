@@ -1,6 +1,8 @@
 #import "BundleLoader.h"
 #import <CommonCrypto/CommonDigest.h>
 
+NSString * const RNBundleLoaderPendingURLKey = @"RNBundleLoaderPendingURL";
+
 @implementation BundleLoader
 
 @synthesize bridge = _bridge;
@@ -9,16 +11,16 @@ RCT_EXPORT_MODULE()
 
 - (void)setBundleURLAndReload:(NSURL *)url
 {
-  [_bridge setValue:url forKey:@"bundleURL"];
+  [[NSUserDefaults standardUserDefaults] setURL:url forKey:RNBundleLoaderPendingURLKey];
+  [[NSUserDefaults standardUserDefaults] synchronize];
   [_bridge reload];
 }
 
 RCT_EXPORT_METHOD(runningMode:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
-  NSString *scheme = [[_bridge bundleURL] scheme];
-  BOOL isRemote = [scheme isEqualToString:@"https"];
-  resolve(isRemote ? @"REMOTE" : @"LOCAL");
+  NSURL *pending = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
+  resolve(pending ? @"REMOTE" : @"LOCAL");
 }
 
 RCT_EXPORT_METHOD(load:(NSURL *)url)

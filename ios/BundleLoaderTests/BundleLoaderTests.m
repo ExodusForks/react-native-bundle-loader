@@ -87,6 +87,7 @@
   NSString *path = [NSTemporaryDirectory()
       stringByAppendingPathComponent:@"verified-bundle.jsbundle"];
   [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+  [[NSUserDefaults standardUserDefaults] removeObjectForKey:RNBundleLoaderPendingURLKey];
   self.loader = nil;
   self.mockBridge = nil;
   [super tearDown];
@@ -127,12 +128,10 @@
   [self.loader load:url];
   [self pumpMainRunloop];
 
-  XCTAssertEqual(self.mockBridge.kvcSets.count, 1u,
-                 @"exactly one KVC set expected for https URL");
-  XCTAssertEqualObjects(self.mockBridge.kvcSets[0][@"key"], @"bundleURL");
-  XCTAssertEqualObjects(self.mockBridge.kvcSets[0][@"value"], url);
-  XCTAssertEqual(self.mockBridge.reloads.count, 1u,
-                 @"exactly one reload expected for https URL");
+  NSURL *stored = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
+  XCTAssertEqualObjects(stored, url, @"https URL must be written to NSUserDefaults");
+  XCTAssertEqual(self.mockBridge.kvcSets.count, 0u, @"no KVC sets expected");
+  XCTAssertEqual(self.mockBridge.reloads.count, 1u, @"exactly one reload expected");
 }
 
 #pragma mark - Test 3: setBundleURLAndReload order
@@ -142,18 +141,13 @@
   NSURL *url = [NSURL URLWithString:@"https://example.com/bundle.js"];
   [self.loader setBundleURLAndReload:url];
 
-  XCTAssertEqual(self.mockBridge.log.count, 2u,
-                 @"setBundleURLAndReload: should produce exactly two ops");
-
-  // KVC set first, then reload -- ordering matters because the bridge can't
-  // reload sensibly without the URL in place.
-  XCTAssertEqualObjects(self.mockBridge.log[0][@"op"], @"set");
-  XCTAssertEqualObjects(self.mockBridge.log[0][@"key"], @"bundleURL");
-  XCTAssertEqualObjects(self.mockBridge.log[0][@"value"], url);
-  XCTAssertEqualObjects(self.mockBridge.log[1][@"op"], @"reload");
-
-  XCTAssertEqual(self.mockBridge.kvcSets.count, 1u);
-  XCTAssertEqual(self.mockBridge.reloads.count, 1u);
+  // URL is written to NSUserDefaults (not KVC) before reload is called.
+  NSURL *stored = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
+  XCTAssertEqualObjects(stored, url, @"URL must be stored in NSUserDefaults");
+  XCTAssertEqual(self.mockBridge.kvcSets.count, 0u, @"no KVC sets expected");
+  XCTAssertEqual(self.mockBridge.reloads.count, 1u, @"exactly one reload expected");
+  XCTAssertEqual(self.mockBridge.log.count, 1u, @"only reload op expected in log");
+  XCTAssertEqualObjects(self.mockBridge.log[0][@"op"], @"reload");
 }
 
 #pragma mark - Test 4: loadVerifiedFromUrl rejects non-https
