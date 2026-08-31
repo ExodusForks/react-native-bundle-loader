@@ -50,53 +50,26 @@ Behavior:
 
 Works on iOS and Android.
 
-### Unverified loading
-
-```ts
-BundleLoader.load('https://bundles.example.com/main.jsbundle');
-```
-
-Functionally identical to the upstream `load()`: passes the URL straight through to the native bridge, which fetches and reloads. **This skips integrity verification — only use it for developer ergonomics, never in production paths.**
-
-The URL is required to use `https:`.
-
-### `BundlePrompt`
-
-A `Modal`-wrapped text input + Reload button intended for developer UX. The default URL field is **empty** (the upstream's hardcoded jsdelivr default has been removed). The button calls the unverified `load()` path.
-
-```tsx
-import { BundlePrompt } from '@exodus/react-native-bundle-loader';
-```
-
-Do not render `BundlePrompt` in store builds.
-
-## Accessing a running Metro packager
-
-Same idea as upstream: expose your local Metro packager via a tunnel (e.g. `ngrok http 8081`) and call `BundleLoader.load(<https tunnel URL>)`. Required Metro query params:
-
-- `dev`: `true` or `false` matching how the binary was built
-- `excludeSource`: `true`
-- `platform`: `ios` or `android` matching the host
-
-Example: `https://example.ngrok.io/index.bundle?dev=false&platform=ios&excludeSource=true`
+> The library exposes **only** the verified path. There is no unverified `load()`
+> API: loading a remote bundle without native SHA-256 verification is an
+> unauthenticated remote-code-execution primitive, so it was removed.
 
 ## Platform support
 
 | Capability                  | iOS | Android |
 | --------------------------- | --- | ------- |
-| `load(url)`                 | ✅  | ✅      |
 | `loadVerified(url, sha256)` | ✅  | ✅      |
 | `runningMode()`             | ✅  | ✅      |
 
 ### How bundle loading works
 
-**iOS** downloads and verifies the bundle natively via `NSURLSession` + `CommonCrypto CC_SHA256`, writes it to `NSTemporaryDirectory()` with `NSDataWritingFileProtectionComplete`, then sets the bridge's `bundleURL` via KVC (`[bridge setValue:url forKey:@"bundleURL"]`) and calls `[bridge reload]`. This is an in-process reload: the old bridge is torn down and a new one is created with the cached file. Because iOS uses ARC, the old bridge's memory (including the Hermes runtime) is freed immediately when the bridge reference is released, before the new runtime allocates — no double-memory peak.
+**iOS** downloads and verifies the bundle natively via `NSURLSession` + `CommonCrypto CC_SHA256`, then writes the verified bytes to `NSTemporaryDirectory()` with `NSDataWritingAtomic | NSDataWritingFileProtectionComplete` (nothing is written before verification). It stores that file URL in `NSUserDefaults` under `RNBundleLoaderPendingURLKey` and calls `[bridge reload]`; the host app's `loadSourceForBridge:` reads the pending URL and loads from it, so the bridge's own `bundleURL` — and therefore `SourceCode.scriptURL` — is never mutated, keeping asset resolution correct. This is an in-process reload; under ARC the old bridge (and its Hermes runtime) is freed before the new one allocates, so there is no double-memory peak.
 
 **Android** uses a process restart instead of an in-process bridge swap. The reason: Android's ART garbage collector is non-deterministic. When a new React context is created alongside an existing one, ART does not guarantee the old Hermes runtime's native heap is freed before the new runtime allocates. On real-world bundle sizes (~50 MB of Hermes bytecode) this causes OOM. The process restart avoids the problem entirely by ensuring only one runtime is ever live.
 
 After download and hash verification, the module:
 
-1. Writes the bundle to `Context.getCacheDir()/verified-bundle.jsbundle`.
+1. Downloads to a temp file, verifies the SHA-256, then **atomically promotes** it to `Context.getCacheDir()/verified-bundle.jsbundle` — the canonical path never holds unverified or partial bytes. On a hash mismatch or download error the temp file is deleted and the current bundle is left untouched.
 2. Sets a one-shot flag in `SharedPreferences` (`"BundleLoader"` / `"pending_remote_bundle"`), using a synchronous `commit()` so the flag survives the imminent process kill.
 3. Restarts the process via `startActivity` + `Process.killProcess`.
 
