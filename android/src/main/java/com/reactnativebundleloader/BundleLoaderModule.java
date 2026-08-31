@@ -3,7 +3,6 @@ package com.reactnativebundleloader;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -24,9 +23,11 @@ import java.security.NoSuchAlgorithmException;
 
 public class BundleLoaderModule extends ReactContextBaseJavaModule {
 
-  private static final String TAG = "BundleLoader";
   // Host app references these as string literals (library is debugImplementation only).
   static final String BUNDLE_FILENAME = "verified-bundle.jsbundle";
+  // Bytes are downloaded here first and only promoted to BUNDLE_FILENAME after the
+  // hash matches, so the canonical path never holds unverified/partial content.
+  static final String BUNDLE_TMP_FILENAME = "verified-bundle.jsbundle.tmp";
   static final String PREFS_NAME = "BundleLoader";
   static final String PREFS_PENDING_KEY = "pending_remote_bundle";
   static final String PREFS_ACTIVE_KEY = "active_remote_bundle";
@@ -48,36 +49,6 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void load(final String url) {
-    if (!isHttps(url)) {
-      Log.e(TAG, "Bundle URL must use the https scheme");
-      return;
-    }
-    new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          File targetFile = new File(
-              getReactApplicationContext().getCacheDir(),
-              BUNDLE_FILENAME
-          );
-          downloadToCache(
-              url,
-              targetFile,
-              CONNECT_TIMEOUT_MS,
-              READ_TIMEOUT_MS,
-              MAX_BUNDLE_BYTES
-          );
-          setPendingFlag();
-          restartApp();
-        } catch (Exception e) {
-          Log.e(TAG, "load(" + url + ") failed", e);
-        }
-      }
-    }, "BundleLoader-load").start();
-  }
-
-  @ReactMethod
   public void loadVerifiedFromUrl(final String url, final String expectedSha256, final Promise promise) {
     if (!isHttps(url)) {
       promise.reject("E_INVALID_URL", "Bundle URL must use the https scheme");
@@ -95,19 +66,22 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
     new Thread(new Runnable() {
       @Override
       public void run() {
+        File cacheDir = getReactApplicationContext().getCacheDir();
+        File targetFile = new File(cacheDir, BUNDLE_FILENAME);
+        File tmpFile = new File(cacheDir, BUNDLE_TMP_FILENAME);
+        // Never write to the canonical path before verifying: download to a temp
+        // file, then promote it atomically only after the hash matches. Clear any
+        // stale temp left by a previously interrupted download.
+        tmpFile.delete();
         try {
-          File targetFile = new File(
-              getReactApplicationContext().getCacheDir(),
-              BUNDLE_FILENAME
-          );
           byte[] actualDigest = downloadAndHashToCache(
               url,
-              targetFile,
+              tmpFile,
               CONNECT_TIMEOUT_MS,
               READ_TIMEOUT_MS,
               MAX_BUNDLE_BYTES
           );
-          if (!timingSafeEquals(actualDigest, expectedDigest)) {
+          if (!verifyAndInstall(tmpFile, targetFile, actualDigest, expectedDigest)) {
             promise.reject("E_HASH_MISMATCH", "Bundle hash mismatch — refusing to load");
             return;
           }
@@ -116,6 +90,8 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
           setPendingFlag();
           restartApp();
         } catch (Exception e) {
+          // Never leave a partial/unverified temp bundle on disk.
+          tmpFile.delete();
           promise.reject("E_LOAD_FAILED", e.getMessage(), e);
         }
       }
@@ -203,6 +179,32 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
   }
 
   /**
+   * Constant-time compares {@code actualDigest} to {@code expectedDigest}. On match, atomically
+   * promotes {@code tmpFile} onto {@code targetFile} (same-directory rename) and returns true —
+   * so {@code targetFile} only ever holds verified bytes. On mismatch, deletes {@code tmpFile}
+   * and returns false. On a promotion failure, deletes {@code tmpFile} and throws. The temp file
+   * is never left behind. Package-private for testing.
+   */
+  static boolean verifyAndInstall(
+      File tmpFile,
+      File targetFile,
+      byte[] actualDigest,
+      byte[] expectedDigest
+  ) throws IOException {
+    if (!timingSafeEquals(actualDigest, expectedDigest)) {
+      tmpFile.delete();
+      return false;
+    }
+    // Same-directory rename is atomic on the app's (POSIX) filesystem and replaces any
+    // existing verified bundle in place, so the canonical path is never partially written.
+    if (!tmpFile.renameTo(targetFile)) {
+      tmpFile.delete();
+      throw new IOException("Failed to promote verified bundle to " + targetFile.getName());
+    }
+    return true;
+  }
+
+  /**
    * Downloads into {@code targetFile} and returns its SHA-256 digest.
    * No redirects; non-200 throws; body capped at {@code maxBytes}. Package-private for testing.
    */
@@ -245,49 +247,6 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
         }
       }
       return digest.digest();
-    } finally {
-      conn.disconnect();
-    }
-  }
-
-  /**
-   * Downloads into {@code targetFile}. No redirects; non-200 throws; body capped at
-   * {@code maxBytes}. Package-private for testing.
-   */
-  static File downloadToCache(
-      String urlString,
-      File targetFile,
-      int connectTimeoutMs,
-      int readTimeoutMs,
-      long maxBytes
-  ) throws IOException {
-    URL url = new URL(urlString);
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setConnectTimeout(connectTimeoutMs);
-    conn.setReadTimeout(readTimeoutMs);
-    // Disallow follow-redirects so an HTTPS URL cannot transparently downgrade to HTTP.
-    conn.setInstanceFollowRedirects(false);
-    try {
-      int code = conn.getResponseCode();
-      if (code != HttpURLConnection.HTTP_OK) {
-        throw new IOException("Bundle fetch failed: HTTP " + code);
-      }
-      long total = 0;
-      try (InputStream in = conn.getInputStream();
-           FileOutputStream out = new FileOutputStream(targetFile)) {
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-          total += n;
-          if (total > maxBytes) {
-            throw new IOException(
-                "Bundle exceeds " + maxBytes + " bytes"
-            );
-          }
-          out.write(buf, 0, n);
-        }
-      }
-      return targetFile;
     } finally {
       conn.disconnect();
     }
