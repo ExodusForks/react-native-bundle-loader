@@ -3,6 +3,11 @@
 
 NSString * const RNBundleLoaderPendingURLKey = @"RNBundleLoaderPendingURL";
 
+// Defensive cap on the downloaded bundle size (parity with the Android module's
+// MAX_BUNDLE_BYTES). Real bundles are ~50 MB; reject anything absurd before it is
+// hashed, written, or loaded.
+static const NSUInteger RNBundleLoaderMaxBundleBytes = 64UL * 1024UL * 1024UL;
+
 @implementation BundleLoader
 
 @synthesize bridge = _bridge;
@@ -21,16 +26,6 @@ RCT_EXPORT_METHOD(runningMode:(RCTPromiseResolveBlock)resolve
 {
   NSURL *pending = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
   resolve(pending ? @"REMOTE" : @"LOCAL");
-}
-
-RCT_EXPORT_METHOD(load:(NSURL *)url)
-{
-  if (![[url scheme] isEqualToString:@"https"]) {
-    return;
-  }
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self setBundleURLAndReload:url];
-  });
 }
 
 // Downloads the bundle at `urlString`, verifies its SHA-256 digest against
@@ -82,6 +77,14 @@ RCT_EXPORT_METHOD(loadVerifiedFromUrl:(NSString *)urlString
     if (http.statusCode < 200 || http.statusCode >= 300) {
       reject(@"E_FETCH_FAILED",
              [NSString stringWithFormat:@"Bundle fetch failed: HTTP %ld", (long)http.statusCode],
+             nil);
+      return;
+    }
+
+    if (data.length > RNBundleLoaderMaxBundleBytes) {
+      reject(@"E_TOO_LARGE",
+             [NSString stringWithFormat:@"Bundle exceeds %lu bytes",
+                 (unsigned long)RNBundleLoaderMaxBundleBytes],
              nil);
       return;
     }

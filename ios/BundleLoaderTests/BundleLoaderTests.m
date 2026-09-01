@@ -5,7 +5,6 @@
 
 @interface BundleLoader (Testing)
 - (void)setBundleURLAndReload:(NSURL *)url;
-- (void)load:(NSURL *)url;
 - (void)loadVerifiedFromUrl:(NSString *)urlString
              expectedSha256:(NSString *)expectedHex
                    resolver:(void (^)(id))resolve
@@ -15,9 +14,11 @@
 #pragma mark - Mock bridge
 
 /**
- * The module talks to its bridge through `[_bridge setValue:forKey:]` and
- * `[_bridge reload]` only. The mock therefore doesn't need to inherit from
- * `RCTBridge` -- it just has to respond to those messages and keep a record.
+ * The production module writes the pending bundle URL to `NSUserDefaults` and
+ * calls `[_bridge reload]` only -- it never sets a value on the bridge. The mock
+ * still records any `setValue:forKey:` so a test can assert that none happen; it
+ * therefore doesn't need to inherit from `RCTBridge`, it just has to respond to
+ * those messages and keep a record.
  */
 @interface BLMockBridge : NSObject
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *kvcSets;
@@ -106,35 +107,7 @@
   }
 }
 
-#pragma mark - Test 1: load rejects non-https
-
-- (void)testLoadRejectsNonHttps
-{
-  NSURL *url = [NSURL URLWithString:@"http://example.com/bundle.js"];
-  [self.loader load:url];
-  [self pumpMainRunloop];
-
-  XCTAssertEqual(self.mockBridge.kvcSets.count, 0u,
-                 @"non-https URL must not trigger any KVC set");
-  XCTAssertEqual(self.mockBridge.reloads.count, 0u,
-                 @"non-https URL must not trigger reload");
-}
-
-#pragma mark - Test 2: load accepts https
-
-- (void)testLoadAcceptsHttps
-{
-  NSURL *url = [NSURL URLWithString:@"https://example.com/bundle.js"];
-  [self.loader load:url];
-  [self pumpMainRunloop];
-
-  NSURL *stored = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
-  XCTAssertEqualObjects(stored, url, @"https URL must be written to NSUserDefaults");
-  XCTAssertEqual(self.mockBridge.kvcSets.count, 0u, @"no KVC sets expected");
-  XCTAssertEqual(self.mockBridge.reloads.count, 1u, @"exactly one reload expected");
-}
-
-#pragma mark - Test 3: setBundleURLAndReload order
+#pragma mark - Test 1: setBundleURLAndReload order
 
 - (void)testSetBundleURLAndReloadOrder
 {
