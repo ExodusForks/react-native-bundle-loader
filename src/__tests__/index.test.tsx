@@ -4,13 +4,11 @@ import { NativeModules } from 'react-native';
 import { loadVerified } from '../index';
 
 type NativeMock = {
-  load: jest.Mock;
   loadVerifiedFromUrl: jest.Mock;
   runningMode: jest.Mock;
 };
 
 const native: NativeMock = {
-  load: jest.fn(),
   loadVerifiedFromUrl: jest.fn(),
   runningMode: jest.fn(),
 };
@@ -75,7 +73,6 @@ describe('loadVerified — native wiring', () => {
   it('throws when loadVerifiedFromUrl is not available on the native module', async () => {
     const saved = (NativeModules as Record<string, unknown>).BundleLoader;
     (NativeModules as Record<string, unknown>).BundleLoader = {
-      load: jest.fn(),
       runningMode: jest.fn(),
     };
     try {

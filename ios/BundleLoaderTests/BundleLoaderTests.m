@@ -14,9 +14,11 @@
 #pragma mark - Mock bridge
 
 /**
- * The module talks to its bridge through `[_bridge setValue:forKey:]` and
- * `[_bridge reload]` only. The mock therefore doesn't need to inherit from
- * `RCTBridge` -- it just has to respond to those messages and keep a record.
+ * The production module writes the pending bundle URL to `NSUserDefaults` and
+ * calls `[_bridge reload]` only -- it never sets a value on the bridge. The mock
+ * still records any `setValue:forKey:` so a test can assert that none happen; it
+ * therefore doesn't need to inherit from `RCTBridge`, it just has to respond to
+ * those messages and keep a record.
  */
 @interface BLMockBridge : NSObject
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *kvcSets;
