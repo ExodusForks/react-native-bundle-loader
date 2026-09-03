@@ -69,7 +69,7 @@ Works on iOS and Android.
 
 After download and hash verification, the module:
 
-1. Downloads to a temp file, verifies the SHA-256, then **atomically promotes** it to `Context.getCacheDir()/verified-bundle.jsbundle` — the canonical path never holds unverified or partial bytes. On a hash mismatch or download error the temp file is deleted and the current bundle is left untouched.
+1. Downloads to a **per-call unique temp file** (`File.createTempFile` in `Context.getCacheDir()`), verifies the SHA-256, then **atomically promotes** it to `Context.getCacheDir()/verified-bundle.jsbundle` — the canonical path never holds unverified or partial bytes. A unique temp per call (rather than a shared fixed path) means two overlapping loads can never swap each other's file between verify and rename. On a hash mismatch or download error the temp file is deleted and the current bundle is left untouched.
 2. Sets a one-shot flag in `SharedPreferences` (`"BundleLoader"` / `"pending_remote_bundle"`), using a synchronous `commit()` so the flag survives the imminent process kill.
 3. Restarts the process via `startActivity` + `Process.killProcess`.
 

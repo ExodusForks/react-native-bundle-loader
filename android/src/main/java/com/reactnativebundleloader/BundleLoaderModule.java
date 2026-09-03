@@ -25,9 +25,6 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
 
   // Host app references these as string literals (library is debugImplementation only).
   static final String BUNDLE_FILENAME = "verified-bundle.jsbundle";
-  // Bytes are downloaded here first and only promoted to BUNDLE_FILENAME after the
-  // hash matches, so the canonical path never holds unverified/partial content.
-  static final String BUNDLE_TMP_FILENAME = "verified-bundle.jsbundle.tmp";
   static final String PREFS_NAME = "BundleLoader";
   static final String PREFS_PENDING_KEY = "pending_remote_bundle";
   static final String PREFS_ACTIVE_KEY = "active_remote_bundle";
@@ -68,12 +65,13 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
       public void run() {
         File cacheDir = getReactApplicationContext().getCacheDir();
         File targetFile = new File(cacheDir, BUNDLE_FILENAME);
-        File tmpFile = new File(cacheDir, BUNDLE_TMP_FILENAME);
-        // Never write to the canonical path before verifying: download to a temp
-        // file, then promote it atomically only after the hash matches. Clear any
-        // stale temp left by a previously interrupted download.
-        tmpFile.delete();
+        // Per-call unique temp: concurrent loadVerifiedFromUrl calls must never share a
+        // temp path, or a second call could swap the file out between this call's verify
+        // and its rename, promoting bytes this call never verified. Download here, then
+        // promote atomically onto the canonical path only after the hash matches.
+        File tmpFile = null;
         try {
+          tmpFile = File.createTempFile("verified-bundle-", ".jsbundle.tmp", cacheDir);
           byte[] actualDigest = downloadAndHashToCache(
               url,
               tmpFile,
@@ -90,9 +88,13 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
           setPendingFlag();
           restartApp();
         } catch (Exception e) {
-          // Never leave a partial/unverified temp bundle on disk.
-          tmpFile.delete();
           promise.reject("E_LOAD_FAILED", e.getMessage(), e);
+        } finally {
+          // No-op after a successful rename; on mismatch or error it guarantees no
+          // partial/unverified temp is left behind.
+          if (tmpFile != null) {
+            tmpFile.delete();
+          }
         }
       }
     }, "BundleLoader-loadVerifiedFromUrl").start();
