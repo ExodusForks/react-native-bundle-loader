@@ -35,7 +35,7 @@ This library exists to load and execute a remote JavaScript bundle inside the ho
 ## Latest hardening
 
 - **Removed the unverified `load()` path** — the `load(url)` native methods (iOS + Android), the JS `load` export, and the `BundlePrompt` UI. Loading a remote bundle without native SHA-256 verification is an unauthenticated RCE primitive; only `loadVerified` remains.
-- **Android verifies before install.** The download streams to a temp file; the verified bytes are atomically promoted (same-directory rename) to the canonical path only after the hash matches, and the temp is deleted on mismatch or download error — the canonical path never holds unverified or partial content.
+- **Android verifies before install.** The download streams to a **per-call unique temp file** (`File.createTempFile`); the verified bytes are atomically promoted (same-directory rename) to the canonical path only after the hash matches, and the temp is deleted on mismatch or download error — the canonical path never holds unverified or partial content. Using a unique temp per call rather than a shared fixed path means overlapping `loadVerifiedFromUrl` calls can never swap each other's file between verify and rename (so a call always promotes exactly the bytes it verified).
 - **iOS bundle-size cap (64 MB)**, matching Android's, rejects oversized responses before they are hashed, written, or loaded.
 
 ## Accepted residual risks

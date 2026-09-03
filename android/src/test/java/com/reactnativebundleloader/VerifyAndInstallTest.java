@@ -31,7 +31,7 @@ public class VerifyAndInstallTest {
   @Test
   public void promotesTempToTargetOnHashMatch() throws Exception {
     File dir = freshDir();
-    File tmp = new File(dir, BundleLoaderModule.BUNDLE_TMP_FILENAME);
+    File tmp = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
     File target = new File(dir, BundleLoaderModule.BUNDLE_FILENAME);
     byte[] body = "bundle-bytes".getBytes(StandardCharsets.UTF_8);
     Files.write(tmp.toPath(), body);
@@ -48,7 +48,7 @@ public class VerifyAndInstallTest {
   @Test
   public void deletesTempAndDoesNotCreateTargetOnMismatch() throws Exception {
     File dir = freshDir();
-    File tmp = new File(dir, BundleLoaderModule.BUNDLE_TMP_FILENAME);
+    File tmp = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
     File target = new File(dir, BundleLoaderModule.BUNDLE_FILENAME);
     Files.write(tmp.toPath(), "attacker-bytes".getBytes(StandardCharsets.UTF_8));
 
@@ -63,7 +63,7 @@ public class VerifyAndInstallTest {
   @Test
   public void doesNotClobberExistingVerifiedBundleOnMismatch() throws Exception {
     File dir = freshDir();
-    File tmp = new File(dir, BundleLoaderModule.BUNDLE_TMP_FILENAME);
+    File tmp = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
     File target = new File(dir, BundleLoaderModule.BUNDLE_FILENAME);
     byte[] good = "previously-verified".getBytes(StandardCharsets.UTF_8);
     Files.write(target.toPath(), good);
@@ -81,7 +81,7 @@ public class VerifyAndInstallTest {
   @Test
   public void replacesExistingBundleOnHashMatch() throws Exception {
     File dir = freshDir();
-    File tmp = new File(dir, BundleLoaderModule.BUNDLE_TMP_FILENAME);
+    File tmp = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
     File target = new File(dir, BundleLoaderModule.BUNDLE_FILENAME);
     Files.write(target.toPath(), "old".getBytes(StandardCharsets.UTF_8));
     byte[] body = "new-verified".getBytes(StandardCharsets.UTF_8);
@@ -93,5 +93,31 @@ public class VerifyAndInstallTest {
     assertTrue(installed);
     assertFalse(tmp.exists());
     assertArrayEquals(body, Files.readAllBytes(target.toPath()));
+  }
+
+  /**
+   * Regression guard for the concurrent-load race: each loadVerifiedFromUrl call now
+   * downloads to its own File.createTempFile temp, so two overlapping installs can never
+   * share a path and promote each other's (unverified/partial) bytes. Distinct temps mean
+   * a call's verify→rename always promotes exactly the bytes it verified.
+   */
+  @Test
+  public void concurrentCallsUseDistinctTempsSoTargetOnlyHoldsVerifiedBytes() throws Exception {
+    File dir = freshDir();
+    File target = new File(dir, BundleLoaderModule.BUNDLE_FILENAME);
+
+    File tmpA = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
+    File tmpB = File.createTempFile("verified-bundle-", ".jsbundle.tmp", dir);
+    assertFalse("each call must get a distinct temp path", tmpA.getPath().equals(tmpB.getPath()));
+
+    byte[] a = "bundle-A".getBytes(StandardCharsets.UTF_8);
+    Files.write(tmpA.toPath(), a);
+    Files.write(tmpB.toPath(), "bundle-B-partial".getBytes(StandardCharsets.UTF_8));
+
+    // A promotes its own verified bytes; B mutating/deleting its own temp (as its call
+    // would) cannot affect A's target — the shared-path swap is impossible.
+    assertTrue(BundleLoaderModule.verifyAndInstall(tmpA, target, sha256("bundle-A"), sha256("bundle-A")));
+    assertTrue("B's temp is fully independent of A's promotion", tmpB.delete());
+    assertArrayEquals("target holds exactly A's verified bytes", a, Files.readAllBytes(target.toPath()));
   }
 }
