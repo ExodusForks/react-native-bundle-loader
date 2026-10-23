@@ -1,5 +1,6 @@
 #import "BundleLoader.h"
 #import <CommonCrypto/CommonDigest.h>
+#import <React/RCTReloadCommand.h>
 
 NSString * const RNBundleLoaderPendingURLKey = @"RNBundleLoaderPendingURL";
 
@@ -18,7 +19,7 @@ RCT_EXPORT_MODULE()
 {
   [[NSUserDefaults standardUserDefaults] setURL:url forKey:RNBundleLoaderPendingURLKey];
   [[NSUserDefaults standardUserDefaults] synchronize];
-  [_bridge reload];
+  RCTTriggerReloadCommandListeners(@"BundleLoader: verified bundle installed");
 }
 
 RCT_EXPORT_METHOD(runningMode:(RCTPromiseResolveBlock)resolve
