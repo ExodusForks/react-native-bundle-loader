@@ -3,6 +3,9 @@
 
 #pragma mark - Testing surface
 
+/// Defined in RCTShim.m; called by its `RCTTriggerReloadCommandListeners` stub.
+extern void (^BLReloadCommandHandler)(NSString *reason);
+
 @interface BundleLoader (Testing)
 - (void)setBundleURLAndReload:(NSURL *)url;
 - (void)loadVerifiedFromUrl:(NSString *)urlString
@@ -15,10 +18,10 @@
 
 /**
  * The production module writes the pending bundle URL to `NSUserDefaults` and
- * calls `[_bridge reload]` only -- it never sets a value on the bridge. The mock
- * still records any `setValue:forKey:` so a test can assert that none happen; it
- * therefore doesn't need to inherit from `RCTBridge`, it just has to respond to
- * those messages and keep a record.
+ * triggers `RCTTriggerReloadCommandListeners` -- it never sends anything to the
+ * bridge. The mock still records any `setValue:forKey:` or `reload` so a test can
+ * assert that none happen; it therefore doesn't need to inherit from `RCTBridge`,
+ * it just has to respond to those messages and keep a record.
  */
 @interface BLMockBridge : NSObject
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *kvcSets;
@@ -89,6 +92,7 @@
       stringByAppendingPathComponent:@"verified-bundle.jsbundle"];
   [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
   [[NSUserDefaults standardUserDefaults] removeObjectForKey:RNBundleLoaderPendingURLKey];
+  BLReloadCommandHandler = nil;
   self.loader = nil;
   self.mockBridge = nil;
   [super tearDown];
@@ -112,15 +116,18 @@
 - (void)testSetBundleURLAndReloadOrder
 {
   NSURL *url = [NSURL URLWithString:@"https://example.com/bundle.js"];
+  NSMutableArray *storedAtReload = [NSMutableArray array];
+  BLReloadCommandHandler = ^(NSString *reason) {
+    NSURL *stored = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
+    [storedAtReload addObject:stored ?: [NSNull null]];
+  };
   [self.loader setBundleURLAndReload:url];
 
-  // URL is written to NSUserDefaults (not KVC) before reload is called.
-  NSURL *stored = [[NSUserDefaults standardUserDefaults] URLForKey:RNBundleLoaderPendingURLKey];
-  XCTAssertEqualObjects(stored, url, @"URL must be stored in NSUserDefaults");
+  // URL is written to NSUserDefaults (not KVC) before the reload command fires.
+  XCTAssertEqual(storedAtReload.count, 1u, @"exactly one reload command expected");
+  XCTAssertEqualObjects(storedAtReload.firstObject, url, @"URL must be stored before the reload command");
   XCTAssertEqual(self.mockBridge.kvcSets.count, 0u, @"no KVC sets expected");
-  XCTAssertEqual(self.mockBridge.reloads.count, 1u, @"exactly one reload expected");
-  XCTAssertEqual(self.mockBridge.log.count, 1u, @"only reload op expected in log");
-  XCTAssertEqualObjects(self.mockBridge.log[0][@"op"], @"reload");
+  XCTAssertEqual(self.mockBridge.reloads.count, 0u, @"bridge reload must not be called");
 }
 
 #pragma mark - Test 4: loadVerifiedFromUrl rejects non-https

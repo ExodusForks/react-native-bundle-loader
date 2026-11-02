@@ -7,10 +7,12 @@ import android.content.SharedPreferences;
 import androidx.annotation.NonNull;
 
 import com.facebook.react.ReactApplication;
+import com.facebook.react.ReactHost;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.devsupport.interfaces.DevSupportManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -125,11 +127,16 @@ public class BundleLoaderModule extends ReactContextBaseJavaModule {
 
   private String getMetroSourceUrl() {
     try {
-      ReactApplication app = (ReactApplication) getReactApplicationContext().getApplicationContext();
-      String url = app.getReactNativeHost()
-          .getReactInstanceManager()
-          .getDevSupportManager()
-          .getSourceUrl();
+      ReactApplicationContext context = getReactApplicationContext();
+      ReactApplication app = (ReactApplication) context.getApplicationContext();
+      DevSupportManager devSupportManager;
+      if (context.isBridgeless()) {
+        ReactHost host = app.getReactHost();
+        devSupportManager = host != null ? host.getDevSupportManager() : null;
+      } else {
+        devSupportManager = app.getReactNativeHost().getReactInstanceManager().getDevSupportManager();
+      }
+      String url = devSupportManager != null ? devSupportManager.getSourceUrl() : null;
       return (url != null && !url.isEmpty()) ? url : null;
     } catch (Exception e) {
       return null;

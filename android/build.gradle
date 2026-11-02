@@ -115,7 +115,13 @@ repositories {
 def reactNativeArtifactVersion = rootProject.ext.has('reactNativeVersion') ? rootProject.ext.get('reactNativeVersion') : '+'
 
 dependencies {
-  api "com.facebook.react:react-native:${reactNativeArtifactVersion}"
+  if (project == rootProject) {
+    // Standalone build (this repo's CI): no React Native Gradle plugin maps react-native:+ to react-android.
+    def reactNativePackage = new groovy.json.JsonSlurper().parse(file('../node_modules/react-native/package.json'))
+    api "com.facebook.react:react-android:${reactNativePackage.version}"
+  } else {
+    api "com.facebook.react:react-native:${reactNativeArtifactVersion}"
+  }
 
   testImplementation 'junit:junit:4.13.2'
   testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
